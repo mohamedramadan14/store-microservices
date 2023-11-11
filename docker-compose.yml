@@ -11,9 +11,10 @@ services:
       - MONGO_INITDB_ROOT_USERNAME=rootuser
       - MONGO_INITDB_ROOT_PASSWORD=rootpass
 
-  db:
+  mysql:
     image: mysql:8
     restart: always
+    container_name: mysql
     environment:
       MYSQL_DATABASE: 'order'
       # So you don't have to use root, but you can if you like
@@ -31,13 +32,11 @@ services:
       # Where our data will be persisted
     volumes:
       - my-db:/var/lib/mysql
-  # Names our volume
 
+  # Names our volume
 
 volumes:
   data:
   my-db:
 
-networks:
-  default:
-    name: mongodb_network
+
