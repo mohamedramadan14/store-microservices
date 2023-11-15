@@ -30,7 +30,7 @@ public class OrderController {
         return CompletableFuture.supplyAsync(() -> orderService.placeOrder(orderRequest));
     }
 
-    public CompletableFuture<String> fallbackForInventory(OrderRequest orderRequest, RuntimeException e) {
+    private CompletableFuture<String> fallbackForInventory(OrderRequest orderRequest, RuntimeException e) {
             log.info("Received Order Request: {} but inventory service is not available", orderRequest);
             log.error("Exception: {}", e.getMessage());
             return CompletableFuture.supplyAsync(() -> "Something went wrong , please try again later");

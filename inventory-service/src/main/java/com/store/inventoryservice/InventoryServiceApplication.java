@@ -16,8 +16,8 @@ public class InventoryServiceApplication {
 		SpringApplication.run(InventoryServiceApplication.class, args);
 	}
 
-	/*
-	TODO: remove this when finish the project
+
+
 	@Bean
 	public CommandLineRunner loadData(InventoryRepository inventoryRepository) {
 		return args -> {
@@ -35,5 +35,5 @@ public class InventoryServiceApplication {
 		};
 	}
 
-	 */
+
 }

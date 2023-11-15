@@ -3,11 +3,13 @@ package com.store.orderservice.services;
 import com.store.orderservice.dto.InventoryResponse;
 import com.store.orderservice.dto.OrderLineItemsDTO;
 import com.store.orderservice.dto.OrderRequest;
+import com.store.orderservice.event.OrderPlacedEvent;
 import com.store.orderservice.models.Order;
 import com.store.orderservice.models.OrderLineItems;
 import com.store.orderservice.repositories.OrderRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.reactive.function.client.WebClient;
@@ -24,7 +26,7 @@ public class OrderService {
 
     private final OrderRepository orderRepository;
     private final WebClient.Builder webClientBuilder;
-
+    private final KafkaTemplate<String , OrderPlacedEvent> kafkaTemplate;
     public String placeOrder(OrderRequest orderRequest) {
         Order order = new Order();
         order.setOrderNumber(UUID.randomUUID().toString());
@@ -54,7 +56,10 @@ public class OrderService {
 
         if (allProductsInStock) {
             orderRepository.save(order);
+            OrderPlacedEvent orderPlacedEvent = OrderPlacedEvent.builder().orderNumber(order.getOrderNumber()).build();
             log.info("Order with number {} placed successfully" , order.getOrderNumber());
+            kafkaTemplate.send("notificationTopic" , orderPlacedEvent);
+            log.info("send message to topic with order number {} to notification service" , order.getOrderNumber());
             return "Order Placed Successfully";
         }else {
             log.warn("Not all products in stock");

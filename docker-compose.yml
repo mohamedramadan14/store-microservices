@@ -1,42 +1,180 @@
-version: "3.8"
+version: '3.9'
+
 services:
-  mongodb:
-    image: mongo
-    container_name: mongodb
-    ports:
-      - 27017:27017
+  postgres-order:
+    container_name: postgres-order
+    image: postgres
+    environment:
+      POSTGRES_DB: order_service
+      POSTGRES_USER: moshata
+      POSTGRES_PASSWORD: password
+      PGDATA: /var/lib/postgresql/data
     volumes:
-      - data:/data
-    environment:
-      - MONGO_INITDB_ROOT_USERNAME=rootuser
-      - MONGO_INITDB_ROOT_PASSWORD=rootpass
-
-  mysql:
-    image: mysql:8
-    restart: always
-    container_name: mysql
-    environment:
-      MYSQL_DATABASE: 'order'
-      # So you don't have to use root, but you can if you like
-      MYSQL_USER: 'user'
-      # You can use whatever password you like
-      MYSQL_PASSWORD: 'password'
-      # Password for root access
-      MYSQL_ROOT_PASSWORD: 'password'
-    ports:
-      # <Port exposed> : <MySQL Port running inside container>
-      - '3306:3306'
+      - ./postgres-order-data/:/var/lib/postgresql/data
     expose:
-      # Opens port 3306 on the container
-      - '3306'
-      # Where our data will be persisted
-    volumes:
-      - my-db:/var/lib/mysql
+      - "5431"
+    ports:
+      - "5431:5431"
+    command: -p 5431
+    restart: unless-stopped
 
-  # Names our volume
+  postgres-inventory:
+      container_name: postgres-inventory
+      image: postgres
+      environment:
+        POSTGRES_DB: inventory_service
+        POSTGRES_USER: moshata
+        POSTGRES_PASSWORD: password
+        PGDATA: /var/lib/postgresql/data/
+      volumes:
+        - ./postgres-inventory-data/:/var/lib/postgresql/data
+      ports:
+        - "5432:5432"
+      restart: unless-stopped
+
+  mongodb:
+      image: mongo
+      container_name: mongodb
+      ports:
+        - "27017:27017"
+      expose:
+        - "27017"
+      restart: always
+      volumes:
+        - ./mongo-data:/data/db
+
+  keycloak-mysql:
+      container_name: keycloak-mysql
+      image: mysql:5.7
+      volumes:
+        - ./keycloak-data:/var/lib/mysql
+      environment:
+        MYSQL_DATABASE: keycloak
+        MYSQL_USER: keycloak
+        MYSQL_PASSWORD: password
+        MYSQL_ROOT_PASSWORD: root
+
+
+  keycloak:
+        container_name: keycloak
+        image: quay.io/keycloak/keycloak
+        command: [ "start-dev", "--import-realm" ]
+        environment:
+            DB_VENDOR: MYSQL
+            DB_ADDR: mysql
+            DB_DATABASE: keycloak
+            DB_USER: keycloak
+            DB_PASSWORD: password
+            KEYCLOAK_ADMIN: admin
+            KEYCLOAK_ADMIN_PASSWORD: admin
+        ports:
+          - "8080:8080"
+        volumes:
+          - /realms:/opt/keycloak/data/import/
+        depends_on:
+          - keycloak-mysql
+
+  zookeeper:
+        image: confluentinc/cp-zookeeper:7.0.1
+        container_name: zookeeper
+        ports:
+          - "5000:2181"
+        environment:
+          ZOOKEEPER_CLIENT_PORT: 5000
+          ZOOKEEPER_TICK_TIME: 2000
+
+
+  broker:
+        image: confluentinc/cp-kafka:7.0.1
+        container_name: broker
+        ports:
+          - "9092:9092"
+        depends_on:
+          - zookeeper
+        environment:
+          KAFKA_BROKER_ID: 1
+          KAFKA_ZOOKEEPER_CONNECT: 'zookeeper:5000'
+          KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_INTERNAL:PLAINTEXT
+          KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092,PLAINTEXT_INTERNAL://broker:29092
+          KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+          KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+          KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+
+  discovery-server:
+      image: moshata/discovery-server:latest
+      container_name: discovery-server
+      pull_policy: always
+      ports:
+        - "8761:8761"
+      expose:
+        - "8761"
+      environment:
+        - SPRING_PROFILES_ACTIVE=docker
+
+  api-gateway:
+      image: moshata/api-gateway:latest
+      container_name: api-gateway
+      pull_policy: always
+      ports:
+        - "8181:8080"
+      expose:
+        - "8181"
+      environment:
+        - SPRING_PROFILES_ACTIVE=docker
+      depends_on:
+        - discovery-server
+        - keycloak
+
+  product-service:
+      image: moshata/product-service:latest
+      container_name: product-service
+      pull_policy: always
+      depends_on:
+        - discovery-server
+        - api-gateway
+        - mongodb
+      environment:
+        - SPRING_PROFILES_ACTIVE=docker
+
+  order-service:
+      image: moshata/order-service:latest
+      container_name: order-service
+      pull_policy: always
+      depends_on:
+        - discovery-server
+        - api-gateway
+        - postgres-order
+        - broker
+      environment:
+        - SPRING_PROFILES_ACTIVE=docker
+        - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres-order:5431/order_service
+
+  inventory-service:
+      image: moshata/inventory-service:latest
+      container_name: inventory-service
+      pull_policy: always
+      depends_on:
+        - discovery-server
+        - api-gateway
+        - postgres-inventory
+      environment:
+        - SPRING_PROFILES_ACTIVE=docker
+        - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres-inventory:5432/inventory_service
+
+  notification-service:
+      image: moshata/notification-service:latest
+      container_name: notification-service
+      pull_policy: always
+      depends_on:
+        - discovery-server
+        - api-gateway
+        - broker
+      environment:
+        - SPRING_PROFILES_ACTIVE=docker
 
 volumes:
-  data:
-  my-db:
-
-
+  postgres-order-data:
+  postgres-inventory-data:
+  mongo-data:
+  realms-data:
+  keycloak-data:

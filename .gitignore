@@ -37,3 +37,9 @@ build/
 
 ### Mac OS ###
 .DS_Store
+
+postgres-order-data/**
+postgres-inventory-data/**
+mongo-product-data/**
+keycloak-data/**
+realms/**
