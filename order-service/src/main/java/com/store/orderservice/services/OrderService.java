@@ -1,5 +1,7 @@
 package com.store.orderservice.services;
 
+import brave.Span;
+import brave.Tracer;
 import com.store.orderservice.dto.InventoryResponse;
 import com.store.orderservice.dto.OrderLineItemsDTO;
 import com.store.orderservice.dto.OrderRequest;
@@ -27,6 +29,7 @@ public class OrderService {
     private final OrderRepository orderRepository;
     private final WebClient.Builder webClientBuilder;
     private final KafkaTemplate<String , OrderPlacedEvent> kafkaTemplate;
+    private final Tracer tracer;
     public String placeOrder(OrderRequest orderRequest) {
         Order order = new Order();
         order.setOrderNumber(UUID.randomUUID().toString());
@@ -38,6 +41,10 @@ public class OrderService {
         order.setOrderLineItemsList(orderLineItemsList);
 
         List<String> skuCodes = order.getOrderLineItemsList().stream().map(OrderLineItems::getSkuCode).toList();
+
+        Span span = tracer.nextSpan().name("Inventory Service Call");
+
+        tracer.withSpanInScope(span.start());
 
         InventoryResponse[] inventoryResponseForSkuCodes = webClientBuilder.build().get()
                 .uri("http://inventory-service/api/v1/inventory" ,
